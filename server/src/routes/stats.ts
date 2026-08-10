@@ -1,6 +1,6 @@
 // server/src/routes/stats.ts
 import { Router } from "express";
-import { getTeamPPG } from "../services/statsService";
+import { getTeamPPG } from "../services/nbaStats";
 
 export const statsRouter = Router();
 
