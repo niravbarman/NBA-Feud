@@ -220,7 +220,8 @@ export default function GamePage() {
     if (revealed[playerId]) return;
 
     const guess = (guesses[playerId] || "").trim();
-    const isActiveRow = fixedOrder && nextIndexToReveal !== -1 && (players[nextIndexToReveal] as any)?.player_id === playerId;
+    const isActiveRow =
+      fixedOrder && nextIndexToReveal !== -1 && (players[nextIndexToReveal] as any)?.player_id === playerId;
 
     if (lives <= 0 || !isActiveRow || guess === "" || allRevealed) return;
 
@@ -410,7 +411,8 @@ export default function GamePage() {
                   const p: any = row;
                   const pid = p.player_id as number;
                   const isRevealed = !!revealed[pid];
-                  const isActiveRow = fixedOrder && nextIndexToReveal !== -1 && (players[nextIndexToReveal] as any)?.player_id === pid;
+                  const isActiveRow =
+                    fixedOrder && nextIndexToReveal !== -1 && (players[nextIndexToReveal] as any)?.player_id === pid;
 
                   const inputStyle: React.CSSProperties = {
                     width: "100%",
@@ -424,6 +426,10 @@ export default function GamePage() {
 
                   const gp = getGP(p);
                   const ppg = getPPG(p);
+
+                  // Per-row reveal logic for GP and PPG: show when globally enabled or when the row is revealed by a correct guess
+                  const showGPCell = showGP || isRevealed;
+                  const showPPGCell = showPPG || isRevealed;
 
                   return (
                     <tr key={pid}>
@@ -482,22 +488,22 @@ export default function GamePage() {
                           padding: "8px",
                           borderBottom: "1px solid #f0f0f0",
                           textAlign: "right",
-                          color: showGP ? "#333" : "#bbb",
+                          color: showGPCell ? "#333" : "#bbb",
                         }}
-                        title={showGP ? String(gp) : "Hidden"}
+                        title={showGPCell ? String(gp) : "Hidden"}
                       >
-                        {showGP ? gp : "—"}
+                        {showGPCell ? gp : "—"}
                       </td>
                       <td
                         style={{
                           padding: "8px",
                           borderBottom: "1px solid #f0f0f0",
                           textAlign: "right",
-                          color: showPPG ? "#333" : "#bbb",
+                          color: showPPGCell ? "#333" : "#bbb",
                         }}
-                        title={showPPG ? String(ppg) : "Hidden"}
+                        title={showPPGCell ? String(ppg) : "Hidden"}
                       >
-                        {showPPG ? (Math.round(ppg * 10) / 10).toFixed(1) : "—"}
+                        {showPPGCell ? (Math.round(ppg * 10) / 10).toFixed(1) : "—"}
                       </td>
                     </tr>
                   );
@@ -625,23 +631,6 @@ export default function GamePage() {
               }}
             >
               Back to Home
-            </button>
-            <button
-              onClick={() => {
-                // Start a fresh attempt with same params
-                window.location.reload();
-              }}
-              style={{
-                padding: "10px 14px",
-                borderRadius: 8,
-                border: "1px solid #111",
-                background: "#111",
-                color: "#fff",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              Play Again
             </button>
           </div>
         </div>
