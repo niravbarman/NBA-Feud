@@ -2,7 +2,7 @@
 
 ## AI USE DISCLAIMER
 
-In creating this project, I used AI tools for assistance - primarily Claude Sonnet 4.5, with some use of ChatGPT 5 for cleanup at the end. Here are the ways I used it, and if relevant, the prompts I used:
+In creating this project, I used AI tools for assistance - primarily Claude Sonnet 4.5, with some use of ChatGPT 5 for cleanup at the end. Here are the ways I used them, and if relevant, the prompts I used:
 
 - Pre-Development Initialization: "I am creating a full-stack web application using TypeScript, Node.js, React, HTML, and CSS. I will be accessing various APIs within this project. Provide me with the setup steps to initialize the project." This prompt gave me a list of what dependencies to install, and guided me through the Vite React+TS project setup steps.
 - API Selection: "I am looking for an API that gives me access to NBA rosters and their stats for specific years. Scrape the internet and provide me with any options that are free and robust." Using the results from this prompt, I narrowed down my options, and made my own assessment for which API to ultimately use for this project.
@@ -286,5 +286,6 @@ The following ideas are already reflected in the project's current known issues 
 - Distinguish leaderboard scores by difficulty.
 - Introduce scoring based on player obscurity.
 - Add player-name autocomplete to reduce spelling-related mistakes.
+- Possible changes to difficulty levels or modifiers (hints, more lives, retries, etc.)
 
 The project is still evolving, and additional gameplay and presentation improvements may be added as development continues.
