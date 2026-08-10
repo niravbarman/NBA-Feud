@@ -32,11 +32,17 @@ jobs:
         working-directory: client
         run: npm ci
 
-      # If you do NOT commit client/.env.production, uncomment this block and remove the next one
-      # - name: Inject production env
-      #   working-directory: client
-      #   run: |
-      #     echo "VITE_API_BASE=https://nba-feud.onrender.com" > .env.production
+      - name: Inject production env
+        working-directory: client
+        run: |
+          cat <<EOF > .env.production
+          VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_API_BASE=${{ secrets.VITE_API_BASE }}
+          EOF
 
       - name: Build
         working-directory: client
