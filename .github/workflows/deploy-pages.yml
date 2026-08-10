@@ -1,4 +1,4 @@
-name: Deploy Vite to GitHub Pages
+name: Deploy Client to GitHub Pages
 
 on:
   push:
@@ -10,6 +10,10 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,32 +21,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js (24.x)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: client/package-lock.json
 
       - name: Install deps
-        run: |
-          cd client
-          npm ci
+        working-directory: client
+        run: npm ci
+
+      # If you do NOT commit client/.env.production, uncomment this block and remove the next one
+      # - name: Inject production env
+      #   working-directory: client
+      #   run: |
+      #     echo "VITE_API_BASE=https://nba-feud.onrender.com" > .env.production
 
       - name: Build
-        run: |
-          cd client
-          npm run build
+        working-directory: client
+        run: npm run build
 
-      - name: Upload Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: client/dist
 
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
