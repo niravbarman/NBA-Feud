@@ -17,6 +17,8 @@ Welcome! Currently we have a very rudimentary game, NBA Feud, which gives the pl
 
 Depending on the difficulty level, the user can see the players' games played (GP) and PPG, and on the higher difficulties, they will also be required to guess the leaders in the exact correct order. Each user gets 5 guesses before the game ends. Their score is then logged on a personal leaderboard which can be found on the home page.
 
+This is currently a far from finished product. Please refer to the Future IMprovements section at the bottom of the readme for expected plans. Thank you for your understanding.
+
 ## How to Play
 
 1. Select an NBA team and season, or choose a random team/season.
