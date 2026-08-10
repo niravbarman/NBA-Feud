@@ -1,4 +1,3 @@
-// server/src/index.ts
 import express from "express";
 import cors from "cors";
 import { TTLCache } from "./cache";
@@ -15,10 +14,10 @@ const RAW_ALLOWED =
     .map((s) => s.trim())
     .filter(Boolean);
 
-// Default to your GitHub Pages origin if none provided
+// Default to GitHub Pages origin if none provided
 const DEFAULT_ALLOWED = ["https://niravbarman.github.io"];
 
-// Include localhost for convenient testing; remove if you want to block it in prod
+// Include localhost for convenient testing
 const DEV_ALLOWED = ["http://localhost:5173"];
 
 // Build the allowlist used in production
@@ -142,8 +141,6 @@ app.get("/api/team-ppg", async (req, res) => {
     res.status(500).json({ error: e?.message || "Failed to fetch Team PPG" });
   }
 });
-
-// Note: Player search and final-day roster features were removed per your request.
 
 app.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);

@@ -46,7 +46,6 @@ export async function ensureUser(): Promise<string> {
   if (current?.uid) return current.uid;
 
   // Attempt anonymous sign-in so players can save scores without an explicit login
-  // (safe to keep even if you eventually add a Google sign-in button elsewhere)
   await signInAnonymously(auth);
 
   return new Promise<string>((resolve, reject) => {

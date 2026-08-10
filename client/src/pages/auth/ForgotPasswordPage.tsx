@@ -1,4 +1,3 @@
-// client/src/pages/auth/ForgotPasswordPage.tsx
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthProvider";
@@ -17,10 +16,8 @@ export default function ForgotPasswordPage() {
     setSubmitting(true);
     try {
       await resetPassword(email);
-      // Generic message to avoid email enumeration
       setMessage("If an account exists for that email, a reset link has been sent.");
     } catch {
-      // Same generic message even on error
       setMessage("If an account exists for that email, a reset link has been sent.");
     } finally {
       setSubmitting(false);

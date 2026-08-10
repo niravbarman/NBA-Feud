@@ -1,4 +1,3 @@
-// client/src/pages/GamePage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getTeamPPG, TeamPPGPlayer } from "../api";

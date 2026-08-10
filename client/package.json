@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "firebase": "^12.17.1",
-    "nba-feud-fullstack": "file:..",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.2"

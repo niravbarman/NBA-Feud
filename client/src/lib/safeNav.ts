@@ -1,4 +1,3 @@
-// client/src/lib/safeNav.ts
 export function safeInternalPath(p?: string): string {
   if (!p) return "/";
   try {

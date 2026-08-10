@@ -1,4 +1,3 @@
-// client/src/pages/LandingPage.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { teams } from "../teams";
@@ -181,7 +180,6 @@ export default function LandingPage() {
     setTeamId(newId);
     setSeason(newSeason);
     setShowTeamSelector(false);
-    // Start game using explicit params so we don't rely on async state updates
     await startGame(newId, newSeason);
   }
 

@@ -1,4 +1,3 @@
-// client/src/lib/env.ts
 export const env = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,

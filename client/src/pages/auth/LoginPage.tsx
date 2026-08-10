@@ -1,4 +1,3 @@
-// client/src/pages/auth/LoginPage.tsx
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthProvider";
@@ -27,7 +26,6 @@ export default function LoginPage() {
       await login(email, password);
       navigate(from, { replace: true });
     } catch {
-      // Required phrasing
       setError("Incorrect Username or Password");
     } finally {
       setSubmitting(false);
@@ -52,7 +50,6 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      // For guests, session-only persistence is usually better
       await setAuthPersistence(false);
       await loginAsGuest();
       navigate("/home", { replace: true });
