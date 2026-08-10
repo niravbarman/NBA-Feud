@@ -1,0 +1,57 @@
+:root {
+  --bg: #0f1115;
+  --panel: #151923;
+  --text: #e6e8ee;
+  --muted: #a0a6b4;
+  --accent: #4f8cff;
+  --border: #232838;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.title { font-size: 18px; font-weight: 600; }
+.input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+}
+.input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+.list { display: grid; gap: 10px; margin-top: 12px; }
+.row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #121624; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer;
+}
+.row:hover { border-color: var(--accent); }
+.muted { color: var(--muted); }
+.badge { background: #101422; border: 1px solid var(--border); border-radius: 14px; padding: 2px 8px; color: var(--muted); }
+.games { margin-top: 16px; }
+.game { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px; border-bottom: 1px dashed var(--border); }
+hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+.link { color: var(--accent); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* Buttons/selects tweak */
+button.input { background: #1a2030; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; }
+button.input:hover { border-color: var(--accent); }
+select.input { appearance: none; background: #0f1115; }
