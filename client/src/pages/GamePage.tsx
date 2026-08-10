@@ -1,9 +1,11 @@
 // client/src/pages/GamePage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getTeamPPG, TeamPPGPlayer } from "../api";
 import { teams } from "../teams";
 import { getSessionHash } from "../session";
+import { db, ensureUser } from "../lib/firebase";
+import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
 
 type RevealMap = Record<number, boolean>;
 type GuessMap = Record<number, string>;
@@ -78,6 +80,9 @@ export default function GamePage() {
   // Shake states
   const [shakingRowId, setShakingRowId] = useState<number | null>(null);
   const [shakeGlobal, setShakeGlobal] = useState<boolean>(false);
+
+  // Ensure save happens only once per completed game instance
+  const savedAttemptRef = useRef<boolean>(false);
 
   // Load and validate ticket
   useEffect(() => {
@@ -162,6 +167,7 @@ export default function GamePage() {
           setAttemptedNames(new Set());
           setShakingRowId(null);
           setShakeGlobal(false);
+          savedAttemptRef.current = false; // allow saving again for this new round
         }
       } catch (e: any) {
         if (!cancel) setError(e?.message || "Failed to fetch");
@@ -279,6 +285,61 @@ export default function GamePage() {
   }
 
   const teamName = useMemo(() => teams.find((t) => t.id === teamId)?.name || "Team", [teamId]);
+
+  // Persist score to Firestore once when the game ends
+  useEffect(() => {
+    async function saveScoreAttempt() {
+      try {
+        const uid = await ensureUser();
+        const key = `${teamId}_${season}_${seasonType}`;
+        const ref = doc(db, "users", uid, "scores", key);
+
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          const now = serverTimestamp();
+
+          if (!snap.exists()) {
+            tx.set(ref, {
+              teamId,
+              teamName,
+              season,
+              seasonType,
+              firstAttemptScore: score,
+              highScore: score,
+              firstAttemptAt: now,
+              updatedAt: now,
+              attempts: 1,
+            });
+          } else {
+            const data = snap.data() as any;
+            const existingFirst =
+              typeof data.firstAttemptScore === "number" ? data.firstAttemptScore : score;
+            const newHigh = Math.max(Number(data.highScore || 0), score);
+            const attempts = Number(data.attempts || 0) + 1;
+
+            tx.update(ref, {
+              teamId,
+              teamName,
+              season,
+              seasonType,
+              firstAttemptScore: existingFirst, // do not overwrite
+              highScore: newHigh,
+              updatedAt: now,
+              attempts,
+            });
+          }
+        });
+      } catch (err) {
+        console.error("Failed to save score:", err);
+      }
+    }
+
+    const gameEnded = players.length > 0 && (allRevealed || lives === 0);
+    if (gameEnded && !savedAttemptRef.current) {
+      savedAttemptRef.current = true; // ensure single save per round
+      saveScoreAttempt();
+    }
+  }, [allRevealed, lives, players.length, teamId, season, seasonType, teamName, score]);
 
   if (!verified) {
     return (
