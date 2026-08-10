@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { teams } from "../teams";
 import { getSessionHash } from "../session";
+import { db, ensureUser } from "../lib/firebase";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 
 type Difficulty = "easy" | "medium" | "hard" | "impossible";
 
@@ -42,6 +44,17 @@ function randomId(bytes = 8): string {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
+type ScoreRow = {
+  id: string;
+  teamId: number;
+  teamName: string;
+  season: string;
+  seasonType: string;
+  firstAttemptScore: number;
+  highScore: number;
+  attempts?: number;
+};
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -246,6 +259,61 @@ export default function LandingPage() {
     );
   }
 
+  // Scoreboard state
+  const [scoreRows, setScoreRows] = useState<ScoreRow[] | null>(null);
+  const [scoreboardError, setScoreboardError] = useState<string | null>(null);
+  const [scoreboardLoading, setScoreboardLoading] = useState<boolean>(true);
+
+  // Load user's scoreboard from Firestore
+  useEffect(() => {
+    let unsub: undefined | (() => void);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const uid = await ensureUser();
+        const q = query(collection(db, "users", uid, "scores"), orderBy("highScore", "desc"));
+        unsub = onSnapshot(
+          q,
+          (snap) => {
+            if (cancelled) return;
+            const rows: ScoreRow[] = snap.docs.map((d) => {
+              const data = d.data() as any;
+              // Fallback team name if missing in doc
+              const fallbackTeamName =
+                teams.find((t) => Number(t.id) === Number(data.teamId))?.name || "Team";
+              return {
+                id: d.id,
+                teamId: Number(data.teamId) || 0,
+                teamName: String(data.teamName || fallbackTeamName),
+                season: String(data.season || ""),
+                seasonType: String(data.seasonType || ""),
+                firstAttemptScore: Number(data.firstAttemptScore || 0),
+                highScore: Number(data.highScore || 0),
+                attempts: Number(data.attempts || 0),
+              };
+            });
+            setScoreRows(rows);
+            setScoreboardLoading(false);
+            setScoreboardError(null);
+          },
+          (err) => {
+            setScoreboardError(err?.message || "Failed to load scores.");
+            setScoreboardLoading(false);
+          }
+        );
+      } catch (e: any) {
+        setScoreboardError(e?.message || "Failed to initialize scores.");
+        setScoreboardLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (unsub) unsub();
+    };
+  }, []);
+
   return (
     <div style={container}>
       <style>
@@ -395,6 +463,58 @@ export default function LandingPage() {
         </div>
 
         <div style={{ height: 8 }} />
+
+        {/* Scoreboard */}
+        <div
+          style={{
+            border: "1px solid #e6e6e6",
+            borderRadius: 10,
+            padding: 16,
+            background: "#fafafa",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <h2 style={{ margin: 0, fontSize: 18 }}>Your Scoreboard</h2>
+          </div>
+
+          {scoreboardLoading ? (
+            <div style={{ color: "#666" }}>Loading scores…</div>
+          ) : scoreboardError ? (
+            <div style={{ color: "#b00020" }}>{scoreboardError}</div>
+          ) : !scoreRows || scoreRows.length === 0 ? (
+            <div style={{ color: "#666" }}>No games played yet. Start a game to see your scores here.</div>
+          ) : (
+            <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" as any }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px" }}>Team</th>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px" }}>Season</th>
+                    <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: "8px" }}>First Score</th>
+                    <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: "8px" }}>High Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scoreRows.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0" }}>{r.teamName}</td>
+                      <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0" }}>
+                        {r.season}
+                        {r.seasonType ? ` (${r.seasonType})` : ""}
+                      </td>
+                      <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                        {r.firstAttemptScore}
+                      </td>
+                      <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                        {r.highScore}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

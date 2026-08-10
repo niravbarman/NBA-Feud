@@ -447,7 +447,7 @@ export default function GamePage() {
       </div>
 
       <div style={{ color: "#666", marginTop: 6, marginBottom: 16 }}>
-        Game settings: {fixedOrder ? "Fixed order" : "Any order"}, {showGP ? "Show GP" : "Hide GP"},{" "}
+        Game settings: Min. 15 GP - {fixedOrder ? "Fixed order" : "Any order"}, {showGP ? "Show GP" : "Hide GP"},{" "}
         {showPPG ? "Show PPG" : "Hide PPG"}
       </div>
 
