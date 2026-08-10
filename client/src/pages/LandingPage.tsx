@@ -22,6 +22,7 @@ function generateSeasonLabelsFrom2000(): string[] {
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth(); // 0..11
 
+  // Default to the latest completed season; if we're in Oct (9) or later, include the current season start
   let latestStart = y - 1;
   if (m >= 9) latestStart = y;
   else if (m <= 5) latestStart = y - 1;
@@ -112,15 +113,16 @@ export default function LandingPage() {
   }
 
   // Create an opaque, session-bound ticket and navigate with only the hash token in the URL
-  async function startGame(withTeamId?: number) {
+  async function startGame(withTeamId?: number, withSeason?: string) {
     const sessionHash = getSessionHash();
     const chosenTeamId = typeof withTeamId === "number" ? withTeamId : teamId;
+    const chosenSeason = typeof withSeason === "string" ? withSeason : season;
 
     const ticket = {
       sessionHash,
       settings: {
         team_id: String(chosenTeamId),
-        season,
+        season: chosenSeason,
         season_type: seasonType,
         hard: fixedOrder ? "1" : "0",
         show_gp: showGP ? "1" : "0",
@@ -148,11 +150,26 @@ export default function LandingPage() {
     return candidate;
   }
 
+  function pickDifferentRandomSeason(currentSeason: string): string {
+    if (seasonOptions.length <= 1) return currentSeason;
+    let idx = Math.floor(Math.random() * seasonOptions.length);
+    let candidate = seasonOptions[idx];
+    if (candidate === currentSeason) {
+      idx = (idx + 1) % seasonOptions.length;
+      candidate = seasonOptions[idx];
+    }
+    return candidate;
+  }
+
   async function handleRandomTeam() {
     const newId = pickDifferentRandomTeam(teamId);
+    const newSeason = pickDifferentRandomSeason(season);
+    // Update UI state for consistency
     setTeamId(newId);
+    setSeason(newSeason);
     setShowTeamSelector(false);
-    await startGame(newId);
+    // Start game using explicit params so we don't rely on async state updates
+    await startGame(newId, newSeason);
   }
 
   // Layout
