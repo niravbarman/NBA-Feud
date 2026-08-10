@@ -48,10 +48,8 @@ if (process.env.NODE_ENV === "production") {
   console.log("CORS: permissive (development)");
 }
 
-// Health
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// OPTIONAL: legacy alias for underscore path (keeps older clients working)
 app.get("/api/team_ppg", (req, res) => {
   const q = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
   res.redirect(307, `/api/team-ppg${q}`);
@@ -60,7 +58,6 @@ app.get("/api/team_ppg", (req, res) => {
 // Cache the full PPG result for a team/season for 24h; filter/slice per-request
 const ppgCache = new TTLCache<any>(24 * 60 * 60 * 1000); // 24 hours
 
-// Helpers to make parsing safe and predictable
 function clampNumber(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
@@ -71,7 +68,6 @@ function parseOr<T extends number>(value: unknown, fallback: T): number {
 
 app.get("/api/team-ppg", async (req, res) => {
   try {
-    // Parse with safe defaults and bounds
     const team_id_raw = req.query.team_id;
     const team_id = Number(team_id_raw);
     if (!Number.isFinite(team_id) || team_id <= 0) {
@@ -97,7 +93,6 @@ app.get("/api/team-ppg", async (req, res) => {
       ppgCache.set(cacheKey, data);
     }
 
-    // Normalize fields so sorting/filtering is deterministic
     const normalized = (data.players ?? []).map((p: any) => {
       const games = Number(p.games_played ?? p.GP ?? p.games ?? 0);
       const points = Number(p.points ?? p.PTS ?? 0);
@@ -115,7 +110,6 @@ app.get("/api/team-ppg", async (req, res) => {
       };
     });
 
-    // Filter and sort: top scorers first, then by games played
     const filtered = normalized
       .filter((p: any) => Number(p.GP) >= min_games)
       .sort((a: any, b: any) => {

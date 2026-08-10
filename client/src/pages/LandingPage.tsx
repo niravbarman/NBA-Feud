@@ -66,7 +66,6 @@ export default function LandingPage() {
     Number(localStorage.getItem(LS_KEYS.teamId) || teams[0]?.id || 1610612747)
   );
 
-  // Keep seasonType internally (default Regular Season). No UI picker.
   const [seasonType] = useState<string>(localStorage.getItem(LS_KEYS.seasonType) || "Regular Season");
 
   const [difficulty, setDifficulty] = useState<Difficulty>(
@@ -74,7 +73,6 @@ export default function LandingPage() {
   );
   const [showTeamSelector, setShowTeamSelector] = useState<boolean>(false);
 
-  // Map difficulty to flags used by GamePage
   const fixedOrder = difficulty === "hard" || difficulty === "impossible";
   const showGP = difficulty === "easy" || difficulty === "hard";
   const showPPG = difficulty === "easy" || difficulty === "hard";
@@ -124,7 +122,6 @@ export default function LandingPage() {
     );
   }
 
-  // Create an opaque, session-bound ticket and navigate with only the hash token in the URL
   async function startGame(withTeamId?: number, withSeason?: string) {
     const sessionHash = getSessionHash();
     const chosenTeamId = typeof withTeamId === "number" ? withTeamId : teamId;
@@ -147,7 +144,6 @@ export default function LandingPage() {
     const token = `${sessionHash}-${ticket.nonce}`;
     sessionStorage.setItem(`game.ticket.${token}`, JSON.stringify(ticket));
 
-    // Only the token (hash) is placed in the URL
     navigate(`/game#${token}`);
   }
 
@@ -176,14 +172,12 @@ export default function LandingPage() {
   async function handleRandomTeam() {
     const newId = pickDifferentRandomTeam(teamId);
     const newSeason = pickDifferentRandomSeason(season);
-    // Update UI state for consistency
     setTeamId(newId);
     setSeason(newSeason);
     setShowTeamSelector(false);
     await startGame(newId, newSeason);
   }
 
-  // Layout
   const container: React.CSSProperties = {
     maxWidth: 1100,
     margin: "0 auto",
@@ -257,12 +251,10 @@ export default function LandingPage() {
     );
   }
 
-  // Scoreboard state
   const [scoreRows, setScoreRows] = useState<ScoreRow[] | null>(null);
   const [scoreboardError, setScoreboardError] = useState<string | null>(null);
   const [scoreboardLoading, setScoreboardLoading] = useState<boolean>(true);
 
-  // Load user's scoreboard from Firestore
   useEffect(() => {
     let unsub: undefined | (() => void);
     let cancelled = false;
@@ -277,7 +269,6 @@ export default function LandingPage() {
             if (cancelled) return;
             const rows: ScoreRow[] = snap.docs.map((d) => {
               const data = d.data() as any;
-              // Fallback team name if missing in doc
               const fallbackTeamName =
                 teams.find((t) => Number(t.id) === Number(data.teamId))?.name || "Team";
               return {

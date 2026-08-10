@@ -32,15 +32,7 @@ export async function setAuthPersistence(remember: boolean) {
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
 }
 
-/**
- * Ensures there is an authenticated user and returns the uid.
- * - If a user is already signed in (Google or otherwise), resolves immediately with their uid.
- * - Otherwise attempts Anonymous sign-in (requires Anonymous provider enabled in Firebase Console).
- *
- * Usage example in your game flow:
- *   const uid = await ensureUser();
- *   // then write to Firestore: users/{uid}/scores/{docId}
- */
+// Ensure a Firebase user exists so scores can be saved.
 export async function ensureUser(): Promise<string> {
   const current = auth.currentUser;
   if (current?.uid) return current.uid;

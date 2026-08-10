@@ -31,7 +31,6 @@ function normalizeName(s: string): string {
     .trim();
 }
 
-// Robust accessors in case API fields vary or are strings
 function getGP(p: any): number {
   let v = p?.gp ?? p?.GP ?? p?.games_played ?? p?.gamesPlayed ?? p?.games ?? null;
   if (typeof v === "string") v = parseInt(v, 10);
@@ -49,12 +48,10 @@ export default function GamePage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Only a token exists in the hash: #<token>
   const token = (location.hash || "").replace(/^#/, "");
 
   const [verified, setVerified] = useState(false);
 
-  // Game configuration derived from the session-bound ticket
   const [season, setSeason] = useState<string>("");
   const [teamId, setTeamId] = useState<number>(0);
   const [seasonType, setSeasonType] = useState<string>("Regular Season");
@@ -62,7 +59,6 @@ export default function GamePage() {
   const [showGP, setShowGP] = useState<boolean>(false);
   const [showPPG, setShowPPG] = useState<boolean>(false);
 
-  // Gameplay state
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [players, setPlayers] = useState<TeamPPGPlayer[]>([]);
@@ -71,19 +67,15 @@ export default function GamePage() {
   const [lives, setLives] = useState<number>(TOTAL_LIVES);
   const [score, setScore] = useState<number>(0);
 
-  // Any-order mode: single global input
   const [globalGuess, setGlobalGuess] = useState<string>("");
   const [globalMessage, setGlobalMessage] = useState<string>("");
   const [attemptedNames, setAttemptedNames] = useState<Set<string>>(new Set());
 
-  // Shake states
   const [shakingRowId, setShakingRowId] = useState<number | null>(null);
   const [shakeGlobal, setShakeGlobal] = useState<boolean>(false);
 
-  // Ensure save happens only once per completed game instance
   const savedAttemptRef = useRef<boolean>(false);
 
-  // Load and validate ticket
   useEffect(() => {
     const localSessionHash = getSessionHash();
     if (!token) {
@@ -122,7 +114,6 @@ export default function GamePage() {
       setShowGP(gpFlag);
       setShowPPG(ppgFlag);
 
-      // Persist for convenience
       localStorage.setItem(LS_KEYS.season, chosenSeason);
       localStorage.setItem(LS_KEYS.teamId, String(chosenTeamId));
       localStorage.setItem(LS_KEYS.seasonType, chosenSeasonType);
@@ -130,7 +121,6 @@ export default function GamePage() {
       localStorage.setItem(LS_KEYS.showGP, gpFlag ? "1" : "0");
       localStorage.setItem(LS_KEYS.showPPG, ppgFlag ? "1" : "0");
 
-      // Infer difficulty for continuity
       let inferred: "easy" | "medium" | "hard" | "impossible" = "medium";
       if (gpFlag && ppgFlag && !hardFlag) inferred = "easy";
       else if (!gpFlag && !ppgFlag && !hardFlag) inferred = "medium";
@@ -144,7 +134,6 @@ export default function GamePage() {
     }
   }, [token, navigate]);
 
-  // Fetch data once verified
   useEffect(() => {
     if (!verified) return;
     let cancel = false;
@@ -152,7 +141,6 @@ export default function GamePage() {
       setLoading(true);
       setError(null);
       try {
-        // Server: top-10 and min 15 GP enforced
         const data = await getTeamPPG(teamId, season, 10, seasonType, 15);
         if (!cancel) {
           const fetched = (data.players || []).slice(0, 10);
@@ -285,7 +273,6 @@ export default function GamePage() {
 
   const teamName = useMemo(() => teams.find((t) => t.id === teamId)?.name || "Team", [teamId]);
 
-  // Persist score to Firestore once when the game ends
   useEffect(() => {
     async function saveScoreAttempt() {
       try {
@@ -487,7 +474,6 @@ export default function GamePage() {
                   const gp = getGP(p);
                   const ppg = getPPG(p);
 
-                  // Per-row reveal logic for GP and PPG: show when globally enabled or when the row is revealed by a correct guess
                   const showGPCell = showGP || isRevealed;
                   const showPPGCell = showPPG || isRevealed;
 
@@ -574,7 +560,6 @@ export default function GamePage() {
         )}
       </div>
 
-      {/* Any-order mode global input */}
       {!fixedOrder && players.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -642,7 +627,6 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* Fixed-order mode actions */}
       {fixedOrder && players.length > 0 && (
         <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
@@ -663,7 +647,6 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* End state */}
       {(allRevealed || lives === 0) && players.length > 0 && (
         <div
           style={{

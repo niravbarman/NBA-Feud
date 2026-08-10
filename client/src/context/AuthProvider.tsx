@@ -42,7 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       signup: async (email, password) => {
         await createUserWithEmailAndPassword(auth, email, password);
-        // Optionally: await sendEmailVerification(auth.currentUser!)
       },
       login: async (email, password) => {
         await signInWithEmailAndPassword(auth, email, password);
