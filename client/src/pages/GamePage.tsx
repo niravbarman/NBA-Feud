@@ -5,29 +5,6 @@ import { getTeamPPG, TeamPPGPlayer } from "../api";
 import { teams } from "../teams";
 import { getSessionHash } from "../session";
 
-function useQuery() {
-  const { search } = useLocation();
-  return useMemo(() => new URLSearchParams(search), [search]);
-}
-
-function generateSeasonLabelsFrom2000(): string[] {
-  const earliestStartYear = 2000;
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth(); // 0..11
-
-  let latestStart = y - 1;
-  if (m >= 9) latestStart = y;
-  else if (m <= 5) latestStart = y - 1;
-
-  const labels: string[] = [];
-  for (let start = latestStart; start >= earliestStartYear; start--) {
-    const end2 = String((start + 1) % 100).padStart(2, "0");
-    labels.push(`${start}-${end2}`);
-  }
-  return labels;
-}
-
 type RevealMap = Record<number, boolean>;
 type GuessMap = Record<number, string>;
 
@@ -53,60 +30,38 @@ function normalizeName(s: string): string {
     .trim();
 }
 
+// Robust accessors in case API fields vary or are strings
+function getGP(p: any): number {
+  let v = p?.gp ?? p?.GP ?? p?.games_played ?? p?.gamesPlayed ?? p?.games ?? null;
+  if (typeof v === "string") v = parseInt(v, 10);
+  if (typeof v !== "number" || Number.isNaN(v)) return 0;
+  return v;
+}
+function getPPG(p: any): number {
+  let v = p?.ppg ?? p?.PPG ?? p?.points_per_game ?? p?.pts_per_g ?? p?.pointsPerGame ?? null;
+  if (typeof v === "string") v = parseFloat(v);
+  if (typeof v !== "number" || Number.isNaN(v)) return 0;
+  return v;
+}
+
 export default function GamePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const q = useQuery();
 
-  // Guard: must have a session hash in the URL that matches this session
-  const urlHash = (location.hash || "").replace(/^#/, "");
-  const sessionHash = getSessionHash();
-  useEffect(() => {
-    if (!sessionHash || !urlHash || urlHash !== sessionHash) {
-      navigate("/", { replace: true });
-    }
-  }, [navigate, sessionHash, urlHash]);
+  // Only a token exists in the hash: #<token>
+  const token = (location.hash || "").replace(/^#/, "");
 
-  // Parse query params with fallbacks
-  const seasonOptions = useMemo(() => generateSeasonLabelsFrom2000(), []);
-  const defaultSeason = seasonOptions[0] || "2015-16";
-  const season = q.get("season") || defaultSeason;
-  const teamId = Number(q.get("team_id") || teams[0]?.id || 1610612747);
-  const seasonType = q.get("season_type") || "Regular Season";
-  // In this app, "hardMode" flag represents "fixed order"
-  const fixedOrder = (q.get("hard") || "0") === "1";
-  const showGP = (q.get("show_gp") || "0") === "1";
-  const showPPG = (q.get("show_ppg") || "0") === "1";
+  const [verified, setVerified] = useState(false);
 
-  // Persist current settings so Back restores them on the Landing page
-  useEffect(() => {
-    localStorage.setItem(LS_KEYS.season, season);
-    localStorage.setItem(LS_KEYS.teamId, String(teamId));
-    localStorage.setItem(LS_KEYS.seasonType, seasonType);
-    localStorage.setItem(LS_KEYS.hard, fixedOrder ? "1" : "0");
-    localStorage.setItem(LS_KEYS.showGP, showGP ? "1" : "0");
-    localStorage.setItem(LS_KEYS.showPPG, showPPG ? "1" : "0");
+  // Game configuration derived from the session-bound ticket
+  const [season, setSeason] = useState<string>("");
+  const [teamId, setTeamId] = useState<number>(0);
+  const [seasonType, setSeasonType] = useState<string>("Regular Season");
+  const [fixedOrder, setFixedOrder] = useState<boolean>(false);
+  const [showGP, setShowGP] = useState<boolean>(false);
+  const [showPPG, setShowPPG] = useState<boolean>(false);
 
-    // Difficulty inference with swapped Medium/Hard roles:
-    // - Easy: any order; GP/PPG visible
-    // - Medium: any order; GP/PPG hidden
-    // - Hard: fixed order; GP/PPG visible
-    // - Impossible: fixed order; GP/PPG hidden
-    let inferred: "easy" | "medium" | "hard" | "impossible" = "medium";
-    if (showGP && showPPG && !fixedOrder) inferred = "easy";
-    else if (!showGP && !showPPG && !fixedOrder) inferred = "medium";
-    else if (showGP && showPPG && fixedOrder) inferred = "hard";
-    else if (!showGP && !showPPG && fixedOrder) inferred = "impossible";
-    localStorage.setItem(LS_KEYS.difficulty, inferred);
-  }, [season, teamId, seasonType, fixedOrder, showGP, showPPG]);
-
-  // Validate core params; if missing, send back to landing
-  useEffect(() => {
-    if (!season || !teamId) {
-      navigate("/", { replace: true });
-    }
-  }, [season, teamId, navigate]);
-
+  // Gameplay state
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [players, setPlayers] = useState<TeamPPGPlayer[]>([]);
@@ -115,7 +70,7 @@ export default function GamePage() {
   const [lives, setLives] = useState<number>(TOTAL_LIVES);
   const [score, setScore] = useState<number>(0);
 
-  // Any-order mode: one global input and message + attempted-name tracking
+  // Any-order mode: single global input
   const [globalGuess, setGlobalGuess] = useState<string>("");
   const [globalMessage, setGlobalMessage] = useState<string>("");
   const [attemptedNames, setAttemptedNames] = useState<Set<string>>(new Set());
@@ -124,7 +79,70 @@ export default function GamePage() {
   const [shakingRowId, setShakingRowId] = useState<number | null>(null);
   const [shakeGlobal, setShakeGlobal] = useState<boolean>(false);
 
+  // Load and validate ticket
   useEffect(() => {
+    const localSessionHash = getSessionHash();
+    if (!token) {
+      navigate("/", { replace: true });
+      return;
+    }
+    const raw = sessionStorage.getItem(`game.ticket.${token}`);
+    if (!raw) {
+      navigate("/", { replace: true });
+      return;
+    }
+    try {
+      const ticket = JSON.parse(raw);
+      if (!ticket || ticket.sessionHash !== localSessionHash) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const s = ticket.settings || {};
+      const chosenTeamId = Number(s.team_id || 0);
+      const chosenSeason = String(s.season || "");
+      const chosenSeasonType = String(s.season_type || "Regular Season");
+      const hardFlag = String(s.hard || "0") === "1";
+      const gpFlag = String(s.show_gp || "0") === "1";
+      const ppgFlag = String(s.show_ppg || "0") === "1";
+
+      if (!chosenTeamId || !chosenSeason) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      setTeamId(chosenTeamId);
+      setSeason(chosenSeason);
+      setSeasonType(chosenSeasonType);
+      setFixedOrder(hardFlag);
+      setShowGP(gpFlag);
+      setShowPPG(ppgFlag);
+
+      // Persist for convenience
+      localStorage.setItem(LS_KEYS.season, chosenSeason);
+      localStorage.setItem(LS_KEYS.teamId, String(chosenTeamId));
+      localStorage.setItem(LS_KEYS.seasonType, chosenSeasonType);
+      localStorage.setItem(LS_KEYS.hard, hardFlag ? "1" : "0");
+      localStorage.setItem(LS_KEYS.showGP, gpFlag ? "1" : "0");
+      localStorage.setItem(LS_KEYS.showPPG, ppgFlag ? "1" : "0");
+
+      // Infer difficulty for continuity
+      let inferred: "easy" | "medium" | "hard" | "impossible" = "medium";
+      if (gpFlag && ppgFlag && !hardFlag) inferred = "easy";
+      else if (!gpFlag && !ppgFlag && !hardFlag) inferred = "medium";
+      else if (gpFlag && ppgFlag && hardFlag) inferred = "hard";
+      else if (!gpFlag && !ppgFlag && hardFlag) inferred = "impossible";
+      localStorage.setItem(LS_KEYS.difficulty, inferred);
+
+      setVerified(true);
+    } catch {
+      navigate("/", { replace: true });
+    }
+  }, [token, navigate]);
+
+  // Fetch data once verified
+  useEffect(() => {
+    if (!verified) return;
     let cancel = false;
     async function load() {
       setLoading(true);
@@ -155,8 +173,7 @@ export default function GamePage() {
     return () => {
       cancel = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, season, seasonType]);
+  }, [verified, teamId, season, seasonType]);
 
   function setGuess(playerId: number, value: string) {
     setGuesses((prev) => ({ ...prev, [playerId]: value }));
@@ -164,24 +181,23 @@ export default function GamePage() {
 
   function revealAll() {
     const all: RevealMap = {};
-    players.forEach((p) => (all[p.player_id] = true));
+    players.forEach((p) => (all[(p as any).player_id] = true));
     setRevealed(all);
   }
 
   const nextIndexToReveal = useMemo(() => {
     for (let i = 0; i < players.length; i++) {
-      const p = players[i];
+      const p = players[i] as any;
       if (!revealed[p.player_id]) return i;
     }
-    return -1; // all revealed
+    return -1;
   }, [players, revealed]);
 
   const allRevealed = useMemo(
-    () => players.length > 0 && players.every((p) => revealed[p.player_id]),
+    () => players.length > 0 && players.every((p) => revealed[(p as any).player_id]),
     [players, revealed]
   );
 
-  // If lives run out, reveal all answers automatically
   useEffect(() => {
     if (lives === 0 && !allRevealed) {
       revealAll();
@@ -198,14 +214,13 @@ export default function GamePage() {
     }
   }
 
-  // Fixed-order mode: per-row submission (active row only)
   function submitGuess(playerId: number) {
-    const row = players.find((p) => p.player_id === playerId);
+    const row = players.find((p) => (p as any).player_id === playerId) as any;
     if (!row) return;
     if (revealed[playerId]) return;
 
     const guess = (guesses[playerId] || "").trim();
-    const isActiveRow = fixedOrder && nextIndexToReveal !== -1 && players[nextIndexToReveal]?.player_id === playerId;
+    const isActiveRow = fixedOrder && nextIndexToReveal !== -1 && (players[nextIndexToReveal] as any)?.player_id === playerId;
 
     if (lives <= 0 || !isActiveRow || guess === "" || allRevealed) return;
 
@@ -217,7 +232,6 @@ export default function GamePage() {
       setGuesses((prev) => ({ ...prev, [playerId]: "" }));
     } else {
       setLives((l) => Math.max(0, l - 1));
-      // Trigger shake on this row's input
       setShakingRowId(playerId);
       window.setTimeout(() => {
         setShakingRowId((curr) => (curr === playerId ? null : curr));
@@ -225,29 +239,25 @@ export default function GamePage() {
     }
   }
 
-  // Any-order mode: single input submission
   function submitGlobalGuessHandler() {
     if (fixedOrder || lives === 0 || allRevealed) return;
     const raw = globalGuess.trim();
     if (!raw) return;
 
     const key = normalizeName(raw);
-    // If already attempted (correct or incorrect), do not penalize or reward
     if (attemptedNames.has(key)) {
       setGlobalMessage("Already guessed that name.");
       setGlobalGuess("");
       return;
     }
 
-    // Mark as attempted
     setAttemptedNames((prev) => {
       const next = new Set(prev);
       next.add(key);
       return next;
     });
 
-    // Try to find a matching unrevealed player
-    const match = players.find((p) => normalizeName(p.player_name) === key);
+    const match = players.find((p) => normalizeName((p as any).player_name) === key) as any;
 
     if (match) {
       if (!revealed[match.player_id]) {
@@ -258,7 +268,6 @@ export default function GamePage() {
         setGlobalMessage("Already guessed that name.");
       }
     } else {
-      // New incorrect attempt: lose one life and shake input
       setLives((l) => Math.max(0, l - 1));
       setGlobalMessage("Incorrect.");
       setShakeGlobal(true);
@@ -270,9 +279,17 @@ export default function GamePage() {
 
   const teamName = useMemo(() => teams.find((t) => t.id === teamId)?.name || "Team", [teamId]);
 
+  if (!verified) {
+    return (
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif" }}>
+        <h1 style={{ margin: 0, fontSize: 24 }}>NBA Feud</h1>
+        <div style={{ marginTop: 12, color: "#666" }}>Verifying game session…</div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif" }}>
-      {/* Inline CSS for shake animation */}
       <style>
         {`
           @keyframes ely-shake {
@@ -288,16 +305,51 @@ export default function GamePage() {
           .shake {
             animation: ely-shake 350ms ease-in-out;
           }
+
+          .game-topbar {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+          }
+          .table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .table-scroll table {
+            min-width: 560px;
+          }
+
+          @media (max-width: 800px) {
+            .game-topbar {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 8px;
+            }
+          }
         `}
       </style>
 
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+      <div className="game-topbar">
         <h1 style={{ margin: 0, fontSize: 24 }}>
           {teamName} — {season} ({seasonType})
         </h1>
-        <button onClick={() => navigate(-1)} style={{ padding: "6px 10px" }}>
-          Back
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            onClick={() => navigate("/home")}
+            style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", cursor: "pointer" }}
+          >
+            Back to Home
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", cursor: "pointer" }}
+            title="Reload data"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Lives and Score */}
@@ -343,161 +395,257 @@ export default function GamePage() {
         {players.length === 0 && !loading && <div style={{ color: "#666" }}>No data. Try a different season or team.</div>}
 
         {players.length > 0 && (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px" }}>#</th>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px" }}>Player</th>
-                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: "8px" }}>GP</th>
-                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: "8px" }}>PPG</th>
-              </tr>
-            </thead>
-            <tbody>
-              {players.map((p, idx) => {
-                const isRevealed = !!revealed[p.player_id];
-                const showGpCell = showGP || isRevealed;
-                const showPpgCell = showPPG || isRevealed;
+          <div className="table-scroll">
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px" }}>#</th>
+                  <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px" }}>Player</th>
+                  <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: "8px" }}>GP</th>
+                  <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: "8px" }}>PPG</th>
+                </tr>
+              </thead>
+              <tbody>
+                {players.map((row, idx) => {
+                  const p: any = row;
+                  const pid = p.player_id as number;
+                  const isRevealed = !!revealed[pid];
+                  const isActiveRow = fixedOrder && nextIndexToReveal !== -1 && (players[nextIndexToReveal] as any)?.player_id === pid;
 
-                const guessValue = guesses[p.player_id] ?? "";
-                const isActiveFixed =
-                  fixedOrder &&
-                  !isRevealed &&
-                  nextIndexToReveal !== -1 &&
-                  idx === nextIndexToReveal &&
-                  lives > 0 &&
-                  !allRevealed;
+                  const inputStyle: React.CSSProperties = {
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #ccc",
+                    background: "#fff",
+                    fontSize: 14,
+                    boxSizing: "border-box",
+                  };
 
-                const submitEnabled = isActiveFixed && guessValue.trim().length > 0;
+                  const gp = getGP(p);
+                  const ppg = getPPG(p);
 
-                return (
-                  <tr key={p.player_id}>
-                    <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0" }}>{idx + 1}</td>
-
-                    <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0" }}>
-                      {isRevealed ? (
-                        p.player_name
-                      ) : fixedOrder ? (
-                        isActiveFixed ? (
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <input
-                              type="text"
-                              value={guessValue}
-                              onChange={(e) => setGuess(p.player_id, e.target.value)}
-                              placeholder="Enter player's full name"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && submitEnabled) {
-                                  submitGuess(p.player_id);
-                                }
-                              }}
-                              className={shakingRowId === p.player_id ? "shake" : undefined}
-                              style={{
-                                flex: "1 1 auto",
-                                padding: "6px 8px",
-                                borderRadius: 6,
-                                border: "1px solid #ccc",
-                                background: "#fff",
-                              }}
-                            />
-                            <button
-                              onClick={() => submitGuess(p.player_id)}
-                              disabled={!submitEnabled}
-                              style={{
-                                padding: "6px 10px",
-                                borderRadius: 6,
-                                border: "1px solid #333",
-                                background: submitEnabled ? "#111" : "#bbb",
-                                color: "#fff",
-                                cursor: submitEnabled ? "pointer" : "not-allowed",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Submit
-                            </button>
-                          </div>
+                  return (
+                    <tr key={pid}>
+                      <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0" }}>{idx + 1}</td>
+                      <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0" }}>
+                        {fixedOrder ? (
+                          isRevealed ? (
+                            <span style={{ fontWeight: 600 }}>{p.player_name}</span>
+                          ) : isActiveRow ? (
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <input
+                                className={shakingRowId === pid ? "shake" : undefined}
+                                type="text"
+                                placeholder="Type full name…"
+                                value={guesses[pid] || ""}
+                                onChange={(e) => setGuess(pid, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    submitGuess(pid);
+                                  }
+                                }}
+                                style={inputStyle}
+                                autoFocus
+                                disabled={lives === 0 || allRevealed}
+                                aria-label={`Guess player rank ${idx + 1}`}
+                              />
+                              <button
+                                onClick={() => submitGuess(pid)}
+                                style={{
+                                  padding: "8px 12px",
+                                  borderRadius: 8,
+                                  border: "1px solid #111",
+                                  background: "#111",
+                                  color: "#fff",
+                                  cursor: "pointer",
+                                  fontWeight: 700,
+                                }}
+                                disabled={lives === 0 || allRevealed || (guesses[pid] || "").trim() === ""}
+                                aria-label="Submit guess"
+                              >
+                                Submit
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ color: "#999" }}>Locked</span>
+                          )
+                        ) : isRevealed ? (
+                          <span style={{ fontWeight: 600 }}>{p.player_name}</span>
                         ) : (
-                          <span style={{ color: "#999" }}>???</span>
-                        )
-                      ) : (
-                        <span style={{ color: "#999" }}>???</span>
-                      )}
-                    </td>
-
-                    <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
-                      {showGpCell ? p.games_played : "??"}
-                    </td>
-                    <td style={{ padding: "8px", borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
-                      {showPpgCell ? p.ppg.toFixed(1) : "??"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          <span style={{ color: "#999" }}>Hidden</span>
+                        )}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px",
+                          borderBottom: "1px solid #f0f0f0",
+                          textAlign: "right",
+                          color: showGP ? "#333" : "#bbb",
+                        }}
+                        title={showGP ? String(gp) : "Hidden"}
+                      >
+                        {showGP ? gp : "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px",
+                          borderBottom: "1px solid #f0f0f0",
+                          textAlign: "right",
+                          color: showPPG ? "#333" : "#bbb",
+                        }}
+                        title={showPPG ? String(ppg) : "Hidden"}
+                      >
+                        {showPPG ? (Math.round(ppg * 10) / 10).toFixed(1) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Any-order mode: single global input */}
+      {/* Any-order mode global input */}
       {!fixedOrder && players.length > 0 && (
-        <div
-          style={{
-            marginTop: 16,
-            paddingTop: 12,
-            borderTop: "1px solid #eee",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <input
+              className={shakeGlobal ? "shake" : undefined}
               type="text"
+              placeholder={lives === 0 || allRevealed ? "Game over" : "Type a player's full name…"}
               value={globalGuess}
               onChange={(e) => setGlobalGuess(e.target.value)}
-              placeholder="Enter full player name for any row"
               onKeyDown={(e) => {
-                if (e.key === "Enter") submitGlobalGuessHandler();
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitGlobalGuessHandler();
+                }
               }}
               disabled={lives === 0 || allRevealed}
-              className={shakeGlobal ? "shake" : undefined}
               style={{
-                flex: "1 1 auto",
-                padding: "8px 10px",
-                borderRadius: 6,
+                flex: "1 1 280px",
+                minWidth: 220,
+                padding: "10px 12px",
+                borderRadius: 8,
                 border: "1px solid #ccc",
-                background: lives === 0 || allRevealed ? "#f6f6f6" : "#fff",
+                background: "#fff",
+                fontSize: 14,
+                boxSizing: "border-box",
               }}
+              aria-label="Global player guess"
             />
             <button
               onClick={submitGlobalGuessHandler}
-              disabled={lives === 0 || allRevealed || globalGuess.trim().length === 0}
+              disabled={lives === 0 || allRevealed || globalGuess.trim() === ""}
               style={{
-                padding: "8px 12px",
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: lives === 0 || allRevealed || globalGuess.trim().length === 0 ? "#bbb" : "#111",
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px solid #111",
+                background: "#111",
                 color: "#fff",
-                cursor:
-                  lives === 0 || allRevealed || globalGuess.trim().length === 0 ? "not-allowed" : "pointer",
-                whiteSpace: "nowrap",
+                cursor: "pointer",
+                fontWeight: 700,
               }}
             >
               Submit Guess
             </button>
+            <button
+              onClick={giveUp}
+              disabled={lives === 0 || allRevealed}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px solid #ccc",
+                background: "#fff",
+                color: "#111",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Give Up
+            </button>
           </div>
-          {globalMessage && <div style={{ color: "#444" }}>{globalMessage}</div>}
+          {globalMessage && (
+            <div style={{ marginTop: 8, color: globalMessage === "Correct!" ? "#1a7f37" : "#b00020", fontWeight: 600 }}>
+              {globalMessage}
+            </div>
+          )}
         </div>
       )}
 
-      <div style={{ marginTop: 12, display: "flex", gap: 12 }}>
-        <button
-          onClick={giveUp}
-          disabled={players.length === 0 || lives === 0 || allRevealed}
-          style={{ padding: "6px 10px", opacity: players.length === 0 || lives === 0 || allRevealed ? 0.6 : 1 }}
-          title="Reveal all answers"
+      {/* Fixed-order mode actions */}
+      {fixedOrder && players.length > 0 && (
+        <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            onClick={giveUp}
+            disabled={lives === 0 || allRevealed}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              background: "#fff",
+              color: "#111",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            Give Up
+          </button>
+        </div>
+      )}
+
+      {/* End state */}
+      {(allRevealed || lives === 0) && players.length > 0 && (
+        <div
+          style={{
+            marginTop: 20,
+            padding: 12,
+            border: "1px solid #e6e6e6",
+            background: "#fafafa",
+            borderRadius: 8,
+          }}
         >
-          Give Up
-        </button>
-      </div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            {allRevealed && lives > 0 ? "All players revealed — well done!" : "Game over"}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={() => navigate("/home")}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px solid #ccc",
+                background: "#fff",
+                color: "#111",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Back to Home
+            </button>
+            <button
+              onClick={() => {
+                // Start a fresh attempt with same params
+                window.location.reload();
+              }}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px solid #111",
+                background: "#111",
+                color: "#fff",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              Play Again
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
