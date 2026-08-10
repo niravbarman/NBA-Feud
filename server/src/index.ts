@@ -7,26 +7,54 @@ import { fetchTeamPPGFromNBAStats } from "./services/nbaStats";
 const app = express();
 
 const PORT = Number(process.env.PORT ?? 4000);
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN;
 
-// CORS: allow explicit frontend when provided; otherwise permissive for dev
-app.use(
-  cors({
-    origin: FRONTEND_ORIGIN ? [FRONTEND_ORIGIN] : true,
-    methods: ["GET", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Accept"],
-    credentials: false,
-  })
+// Accept a single origin (FRONTEND_ORIGIN) or a comma-separated list (FRONTEND_ORIGINS)
+const RAW_ALLOWED =
+  (process.env.FRONTEND_ORIGINS ?? process.env.FRONTEND_ORIGIN ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+// Default to your GitHub Pages origin if none provided
+const DEFAULT_ALLOWED = ["https://niravbarman.github.io"];
+
+// Include localhost for convenient testing; remove if you want to block it in prod
+const DEV_ALLOWED = ["http://localhost:5173"];
+
+// Build the allowlist used in production
+const ALLOWED_ORIGINS = Array.from(
+  new Set([...(RAW_ALLOWED.length ? RAW_ALLOWED : DEFAULT_ALLOWED), ...DEV_ALLOWED])
 );
+
+// CORS: restricted in production, permissive otherwise
+if (process.env.NODE_ENV === "production") {
+  app.use(
+    cors({
+      origin: (origin, cb) => {
+        // Allow server-to-server and curl/postman (no Origin header)
+        if (!origin) return cb(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+        return cb(new Error("CORS: Not allowed"), false);
+      },
+      methods: ["GET", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Accept"],
+      credentials: false,
+    })
+  );
+  console.log("CORS: restricted (production)");
+  console.log("CORS allowed origins:", ALLOWED_ORIGINS.join(", "));
+} else {
+  // Development: wide open for ease of local testing
+  app.use(cors());
+  console.log("CORS: permissive (development)");
+}
 
 // Health
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 // OPTIONAL: legacy alias for underscore path (keeps older clients working)
-// Place this BEFORE the canonical handler.
 app.get("/api/team_ppg", (req, res) => {
   const q = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
-  // 307 preserves method semantics if you ever support POST here
   res.redirect(307, `/api/team-ppg${q}`);
 });
 
@@ -48,7 +76,9 @@ app.get("/api/team-ppg", async (req, res) => {
     const team_id_raw = req.query.team_id;
     const team_id = Number(team_id_raw);
     if (!Number.isFinite(team_id) || team_id <= 0) {
-      return res.status(400).json({ error: "team_id is required and must be a positive number" });
+      return res
+        .status(400)
+        .json({ error: "team_id is required and must be a positive number" });
     }
 
     const season = String(req.query.season ?? "2015-16");
@@ -70,17 +100,14 @@ app.get("/api/team-ppg", async (req, res) => {
 
     // Normalize fields so sorting/filtering is deterministic
     const normalized = (data.players ?? []).map((p: any) => {
-      const games =
-        Number(p.games_played ?? p.GP ?? p.games ?? 0);
-      const points =
-        Number(p.points ?? p.PTS ?? 0);
-      const ppgField =
-        Number(p.ppg ?? p.PPG ?? p.points_per_game ?? p.PTS_PER ?? NaN);
+      const games = Number(p.games_played ?? p.GP ?? p.games ?? 0);
+      const points = Number(p.points ?? p.PTS ?? 0);
+      const ppgField = Number(p.ppg ?? p.PPG ?? p.points_per_game ?? p.PTS_PER ?? NaN);
       const ppg = Number.isFinite(ppgField)
         ? ppgField
         : games > 0
-          ? Number((points / games).toFixed(2))
-          : 0;
+        ? Number((points / games).toFixed(2))
+        : 0;
 
       return {
         ...p,
@@ -95,13 +122,12 @@ app.get("/api/team-ppg", async (req, res) => {
       .sort((a: any, b: any) => {
         if (b.PPG !== a.PPG) return b.PPG - a.PPG;
         if (b.GP !== a.GP) return b.GP - a.GP;
-        return String(a.player_name ?? a.Player ?? "").localeCompare(String(b.player_name ?? b.Player ?? ""));
+        return String(a.player_name ?? a.Player ?? "").localeCompare(
+          String(b.player_name ?? b.Player ?? "")
+        );
       });
 
     const players = filtered.slice(0, limit);
-
-    // Optional client-side caching hint (adjust or remove as needed)
-    // res.setHeader("Cache-Control", "public, max-age=300");
 
     res.json({
       season,
@@ -121,9 +147,4 @@ app.get("/api/team-ppg", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
-  if (FRONTEND_ORIGIN) {
-    console.log(`CORS allowed origin: ${FRONTEND_ORIGIN}`);
-  } else {
-    console.log("CORS: permissive (development)");
-  }
 });
