@@ -1,5 +1,16 @@
 # NBA Feud (name in progress)
 
+## AI USE DISCLAIMER
+
+In creating this project, I used AI tools for assistance - primarily Claude Sonnet 4.5, with some use of ChatGPT 5 for cleanup at the end. Here are the ways I used it, and if relevant, the prompts I used:
+
+- Pre-Development Initialization: "I am creating a full-stack web application using TypeScript, Node.js, React, HTML, and CSS. I will be accessing various APIs within this project. Provide me with the setup steps to initialize the project." This prompt gave me a list of what dependencies to install, and guided me through the Vite React+TS project setup steps.
+- API Selection: "I am looking for an API that gives me access to NBA rosters and their stats for specific years. Scrape the internet and provide me with any options that are free and robust." Using the results from this prompt, I narrowed down my options, and made my own assessment for which API to ultimately use for this project.
+- Code Snippets: At various points, I had ideas for functions I wanted to implement, but knew would be tedious. I had my agent generate code snippets for these, and I subsequently cleaned them up to fit within my existing code.
+- Debugging: At various points if I was having build or web page issues, I would copy my code file along with the error, and have the agent guide me through debugging.
+- Code Cleanup: "This is the link to my GitHub Repo: [link]. Comb through the files and flag any unused, irrelevant, or unnecessary files, code snippets, and comments." Using the results of this prompt, I combed through the code and updated/removed anything that was no longer needed.
+- README Creation: I wrote the inital README on my own, and then 
+
 ## About
 
 Welcome! Currently we have a very rudimentary game, NBA Feud, which gives the players a chance to test their NBA knowledge. In this game, players can either select a historic NBA team (from 2000 and on), or be assigned one at random. They will then be placed on the game page, where they will see 10 rows that correspond to the selected team's top 10 scoring leaders by points-per-game (PPG), limited to those who played at least 15 games.
