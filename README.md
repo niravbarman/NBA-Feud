@@ -9,7 +9,7 @@ In creating this project, I used AI tools for assistance - primarily Claude Sonn
 - Code Snippets: At various points, I had ideas for functions I wanted to implement, but knew would be tedious. I had my agent generate code snippets for these, and I subsequently cleaned them up to fit within my existing code.
 - Debugging: At various points if I was having build or web page issues, I would copy my code file along with the error, and have the agent guide me through debugging.
 - Code Cleanup: "This is the link to my GitHub Repo: [link]. Comb through the files and flag any unused, irrelevant, or unnecessary files, code snippets, and comments." Using the results of this prompt, I combed through the code and updated/removed anything that was no longer needed.
-- README Creation: I wrote the inital README on my own, and then 
+- README Creation: I wrote the initial README on my own, and then used ChatGPT with the formatting, as well as filling in any gaps without changing any of what I created.
 
 ## About
 
